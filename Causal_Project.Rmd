@@ -1,0 +1,404 @@
+---
+title: "Causal_Project"
+author: "Rebecca Netson"
+date: "11/5/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(NHANES)
+library(gtsummary)
+library(dplyr)
+```
+\textbf{First Time Point 2009-2010}
+```{r}
+df <- NHANES[NHANES$SurveyYr == '2009_10', ]
+df.subset <- df[df$Age >= 18, ]
+df.subset.vars <- subset(df.subset, select = c(ID, Age, RegularMarij,PhysActive,Depressed,Gender,BMI,SleepTrouble))
+df.final.first.time <- df.subset.vars[complete.cases(df.subset.vars$PhysActive), ]
+df.final.first.time <- df.final.first.time[complete.cases(df.final.first.time$RegularMarij), ]
+df.final.first.time
+print(n_distinct(df.final.first.time$ID))
+sum(df.final.first.time$RegularMarij == "Yes")
+df.final.no.duplicates <- df.final.first.time[!duplicated(df.final.first.time$ID), ]
+df.final.no.duplicates$BMI[is.na(df.final.no.duplicates$BMI)] <- mean(df.final.no.duplicates$BMI, na.rm = TRUE)
+df.final.first.time <- df.final.no.duplicates
+
+
+```
+\textbf{Second Time Point 2011-2012}
+```{r}
+#library(dplyr)
+#df1 <- NHANES[NHANES$SurveyYr == '2011_12', ]
+#df1.subset <- df1[df1$Age >= 18, ]
+#df1.subset.vars <- subset(df1.subset, select = c(ID, Age, RegularMarij,PhysActive,Depression,BMI,SleepTrouble))
+#df1.subset.vars.rename <- df1.subset.vars %>% rename(
+#  Age.2 = Age,
+#  RegularMarij.2 = RegularMarij,
+#  PhysActive.2 = PhysActive,
+#  LittleInterest.2 = LittleInterest,
+#  BMI.2 = BMI,
+#  SleepTrouble.2 = SleepTrouble
+#)
+#head(df1.subset.vars.rename)
+#df1.final.second.time <- df1.subset.vars[complete.cases(df1.subset.vars$RegularMarij & df1.subset.vars$PhysActive), ]
+#df1.final.second.time
+#print(n_distinct(df1.final.second.time$ID))
+```
+
+```{r}
+#make first time period the data set
+data <- df.final.first.time
+
+#rename columns to match with the endogenous variables:
+library(dplyr)
+
+data <- data %>% rename(
+  W1.Age = Age, #why are these both W_1 in the proposal?
+  W5 = Gender,
+  W2 = BMI,
+  W3 = SleepTrouble,
+  W4 = Depressed, #should use this over little interest
+  A = RegularMarij,
+  Y = PhysActive
+)
+
+head(data)
+```
+
+Changing Gender of Participant W5 to be 1 (male) or 0 (female)
+```{r}
+ObsData <- subset(data, select = c(W1.Age, W5, W2, W3, W4, A, Y))
+ObsData1 <- ObsData
+ObsData1$W5 <- as.numeric(ObsData$W5)
+
+
+sum(ObsData$W5 == "female")
+
+
+ObsData1$W5[ObsData1$W5 == 1] <- 0 #females
+#check
+sum(ObsData$W5 == "female")
+sum(ObsData1$W5 == 0)
+
+ObsData1$W5[ObsData1$W5 == 2] <- 1 #males
+#check
+sum(ObsData$W5 == "male")
+sum(ObsData1$W5 == 1)
+
+```
+Changing Sleeping Trouble W3 to be 0 (no) or 1 (yes)
+```{r}
+sum(ObsData$W3 == "No")
+sum(ObsData$W3 == "Yes")
+ObsData1$W3 <- as.numeric(ObsData$W3)
+sum(ObsData1$W3 == 1) #This means that they answered no
+sum(ObsData1$W3 == 2) #This means that they answered yes
+ObsData1$W3[ObsData1$W3 == 1] <- 0 
+ObsData1$W3[ObsData1$W3 == 2] <- 1 
+
+#check
+sum(ObsData1$W3 == 0) #This means that they answered no
+sum(ObsData1$W3 == 1) #This means that they answered yes
+
+```
+Changing exposure Regular Marijuana use (A) to be (0):No or (1):Yes
+```{r}
+sum(ObsData$A == "No") #1807 answered no
+sum(ObsData$A == "Yes") #607 answered yes
+ObsData1$A <- as.numeric(ObsData$A)
+sum(ObsData1$A == 1) #This means that they answered no
+sum(ObsData1$A == 2) #This means that they answered yes
+ObsData1$A[ObsData1$A == 1] <- 0 
+ObsData1$A[ObsData1$A == 2] <- 1 
+
+#check
+sum(ObsData1$A == 0) #This means that they answered no
+sum(ObsData1$A == 1) #This means that they answered yes
+```
+Changing Depression (W4) to be (0):None, (1):Several (2):Most
+```{r}
+sum(ObsData$W4 == "None") #1805 answered none
+sum(ObsData$W4 == "Several") #511 answered several
+sum(ObsData$W4 == "Most") #161 answered most
+
+
+ObsData1$W4 <- as.numeric(ObsData$W4)
+
+sum(ObsData1$W4 == 1) #This means that they answered None
+sum(ObsData1$W4 == 2) #This means that they answered Several
+sum(ObsData1$W4 == 3) #This means that they answered Most
+
+
+ObsData1$W4[ObsData1$W4 == 1] <- 0 
+ObsData1$W4[ObsData1$W4 == 2] <- 1
+ObsData1$W4[ObsData1$W4 == 3] <- 2 
+
+
+#check
+sum(ObsData1$W4 == 0) #This means that they answered none
+sum(ObsData1$W4 == 1) #This means that they answered several
+sum(ObsData1$W4 == 2) #This means that they answered most
+```
+
+
+Changing outcome of physical activity (Y) to be (0):None, (1):Yes
+```{r}
+sum(ObsData$Y == "No") #1090 answered no
+sum(ObsData$Y == "Yes") #1387 answered yes
+ObsData1$Y <- as.numeric(ObsData$Y)
+sum(ObsData1$Y == 1) #This means that they answered no
+sum(ObsData1$Y == 2) #This means that they answered yes
+ObsData1$Y[ObsData1$Y == 1] <- 0 
+ObsData1$Y[ObsData1$Y == 2] <- 1 
+
+#check
+sum(ObsData1$Y == 0) #This means that they answered no
+sum(ObsData1$Y == 1) #This means that they answered yes
+```
+grouping obesity BMI W2
+Underweight (>18.5) 0
+Normal (18.5-24.9) 1
+Overweight (25-30) 2
+Obese (30<) 3
+
+```{r}
+#ObsData1 <- ObsData
+ObsData1$W2 <- ifelse(ObsData1$W2 <= 18.5, 0, ifelse(ObsData1$W2 > 18.5 & ObsData1$W2 <= 24.9, 1, ifelse(ObsData1$W2 >= 25 & ObsData1$W2 <= 30, 2, 3)))
+summary(ObsData1$W2)
+sum(ObsData1$W2 == 0)
+```
+
+
+
+```{r}
+#Changing back to ObsData 
+ObsData <- ObsData1
+head(ObsData)
+```
+\textbf{Plots for reference:}
+
+```{r}
+library(ggplot2)
+graphData <- ObsData
+#graphData$W5 <- as.numeric(graphData$W5)
+graphData$W5 <- as.factor(graphData$W5)
+
+
+levels(graphData$W5)[levels(graphData$W5)== "0"] <- "Female"
+levels(graphData$W5)[levels(graphData$W5)== "1"] <- "Male"
+
+
+graphData$A <- as.factor(graphData$A)
+
+
+levels(graphData$A)[levels(graphData$A)== "0"] <- "Non-Regular Marijuana User"
+levels(graphData$A)[levels(graphData$A)== "1"] <- "Regular Marijuana User"
+
+
+ggplot(data = graphData, aes(x = W1.Age, y = W2))+geom_point(aes(colour = factor(A)))+xlab("Age of Participant")+ylab("Body Mass Index of Participant")+facet_wrap(~as.factor(W5))
+```
+
+```{r}
+library(gtsummary)
+tbl_summary(df.final.first.time, 
+            by = RegularMarij,statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} / {N} ({p}%)")) %>%  add_n() %>% 
+  add_p() %>% # test for a difference between groups
+  modify_header(label = "**Variable**") %>% # update the column header
+  bold_labels() 
+
+
+des.table <- tbl_summary(ObsData1, 
+            by = A,statistic = list(all_continuous() ~ "{mean} ({sd})",
+                     all_categorical() ~ "{n} / {N} ({p}%)")) %>%  add_n() %>% 
+  add_p() %>% # test for a difference between groups
+  modify_header(label = "**Variable**") %>% # update the column header
+  bold_labels() 
+
+des.table
+des.table.export <- as_tibble(des.table)
+library(xtable)
+xtable(des.table.export, caption = "Summary statistics of NHANES data")
+#writexl::write_xlsx(des.table.export, "des.table.export.xlsx")
+```
+
+\textbf{Roadmap Questions}
+
+# 0 Specify the Research Questions, including the target parameter
+
+Changes that we should make for positive violations:
+1.) Groupings for BMI
+2.) If we use age as groups then we can have different effects for different age groups 
+3.) Should we have upper age restrictions, if no one over the age of 80 has smoked then why include them
+4.) If you treat them all covariates as one node then you can group 
+5.) W4 is a confounder 
+6.) The assumption is age and gender are not going to influence the outcome but that is not true. 
+7.) Collapse all W's into a single W
+
+
+
+
+# 0.a Causal Question:
+
+What is the causal effect of regular Marijuana use on physical activity?
+
+
+$$W_1= f_{W_1}(U_{w_{1}})$$
+$$W_2 = f_{W_2}(W_3, W_4, U_{w_{2}})$$
+$$W_3= f_{W_3}(W_4, U_{w_{3}})$$
+$$W_4 = f_{W_4}(U_{W_{4}})$$
+$$A = f_A(W_1, W_3, W_4, U_{A})$$
+
+$$Y = f_Y(A, W_2, W_4, U_{Y})$$
+# 1. Specify the Causal Model
+
+# 2. Translate your question into a formal target causal parameter, defined using counterfactuals
+
+$$\Psi^{*}(\mathbb{P}^{*}) = E^{*}(Y_{1})-E^{*}(Y_{0})=P^{*}(Y_{1}=1)-P^{*}(Y_{0}=1)$$
+
+$$\Psi(\mathbb{P}_0) = \sum_W \left( \mathbb{E}_0 (Y|A = 1, W = w) - \mathbb{E}_0 (Y|A = 0, W = w)  \right) \mathbb{P}_0 (W=w)$$
+Counterfactuals: $(Y_{a}: a \in A = (0,1))$
+- $Y_{1}$: counterfactual if an individual used Marijuana regularly 
+- $Y_{0}$: counterfactual if an individual did not use Marijuana regularly
+
+For identifiability to hold we would need:
+
+- $$U_{A} \perp U_{Y}$$
+
+And (i) or (ii):
+
+\textit{(i)}:    
+$$U_{A} \perp U_{W_{1}}$$
+$$U_{A} \perp U_{W_{3}}$$
+$$U_{A} \perp U_{W_{4}}$$
+\textit{ii}:
+
+$$U_{Y} \perp U_{W_{2}}$$
+$$U_{Y} \perp U_{W_{4}}$$
+
+# 3. Specify your observed data and its link to the causal model
+
+
+# 4.a Propensity score (IPTW)
+# 4.b Predict each individuals probability of using Marijuana reguarly/not active given their covariates:
+$P_{o}(A=1|W)$
+Conditional probability of having used marijuana regularly, given the participant's characteristics. 
+Priori-specified parametric regression model:
+
+$$P_{0}(A=1|W)=logit^{-1}[\beta_{0}+\beta_{1.age}W_{1.age} + \beta_{1.gender}W_{1.gender} +
+\beta_{2}W_{2} + \beta_{3}W_{3}+\beta_{4}W_{4}]$$
+```{r}
+head(ObsData)
+tail(ObsData)
+#Should we be using min max scaling for age so it does not give a bigger weight (scales)
+prob.AW.reg<- glm(A ~ W1.Age + W5 +W2 +W3 + W4, family="binomial", data=ObsData)
+#predicted probability of being a regular marijuana user given baseline covariates
+prob.1W <- predict(prob.AW.reg, type= "response")
+#predicted probability of not being a regular marijuana user given baseline covariates
+prob.0W <- 1 - prob.1W
+
+
+summary(prob.1W)
+
+summary(prob.0W)
+
+#creating the weights 
+wt1 <- as.numeric(ObsData$A==1)/prob.1W
+wt0 <- as.numeric(ObsData$A==0)/prob.0W
+#point estimate
+iptw <- mean( wt1*ObsData$Y) - mean( wt0*ObsData$Y)
+iptw
+
+
+#Stabilized IPTW estimator - Modified Horvitz-Thompson estimator
+iptw.st <- sum( wt1*ObsData$Y)/sum( wt1) - sum( wt0*ObsData$Y)/sum( wt0)
+iptw.st
+
+#Unadjusted
+A.1.Y <- c(ObsData[ObsData$A==1, 'Y'])
+A.0.Y <- c(ObsData[ObsData$A==0, 'Y'])
+
+unadj <- mean(A.1.Y$Y) - mean(A.0.Y$Y)
+unadj
+
+
+#Comparisons with gcomp
+outcome.reg <- glm(Y ~ A + W1.Age +W5 +W2 +W3 +W4, data=ObsData, family='binomial')
+exp <- unexp <- ObsData
+exp$A <- 1
+unexp$A <- 0
+SS <- mean( predict(outcome.reg, newdata=exp, type='response') ) -
+mean( predict(outcome.reg, newdata=unexp, type='response') )
+SS
+round(data.frame(iptw, iptw.st, unadj, SS)*100,1)
+```
+
+
+
+#5. Using SuperLearner to select the estimator with the lowest cross-validated risk estimate
+
+Using 16 folds!
+We want $\frac{n}{16}$ folds, as $n=1648$, $\frac{1648}{16}=103$
+```{r}
+set.seed(1)
+Fold <- c(rep(1,103), rep(2,103), rep(3,103), rep(4,103), rep(5,103), 
+          rep(6,103), rep(7,103), rep(8,103), rep(9,103), rep(10,103),
+          rep(11,103),rep(12,103), rep(13,103),rep(14,103),rep(15,103),
+          rep(16,103))
+
+Pred <- matrix(NA, nrow = 1648, ncol = 4)
+CV.risk <- matrix(NA, nrow = 16, ncol = 4)
+colnames(CV.risk)<-c('Estimate A', 'Estimate B', 'Estimate C', 'Estimate D')
+
+
+for(V in 1:16){
+  valid <- ObsData[Fold == V, ] #validation set
+  train <- ObsData[Fold !=V, ] #training set
+  Est.A <- glm(Y~ 1, data = train)
+  Est.B <- glm(Y ~ W1.Age + W5 + W2 + W3 + W4, data = train)
+  Est.C <- glm(Y ~ W1.Age + W5 + W2 + W3 + W4 + W2*W4, data = train)
+  Est.D <- glm(Y ~ W1.Age + W5 + W2 + W3 + W4 + W1.Age*W3 + W2*W5, data = train)
+  
+  Pred.A <- predict(Est.A, newdata = valid, type = 'response')
+  Pred.B <- predict(Est.B, newdata = valid, type = 'response')
+  Pred.C <- predict(Est.C, newdata = valid, type = 'response')
+  Pred.D <- predict(Est.D, newdata = valid, type = 'response')
+  Pred[Fold==V, ] <- cbind(Pred.A, Pred.B, Pred.C, Pred.D)
+  #Using L2 Loss function to estimate cross-validated risk for each algorithim, average squared
+  #difference between the outcomes in the validation set and the predicted probability based on
+  #the estimator fit with the training data
+  CV.risk[V,]<-c(mean((valid$Y - Pred.A)^2), mean((valid$Y - Pred.B)^2),
+  mean((valid$Y - Pred.C)^2), mean((valid$Y - Pred.D)^2)) #L2 loss function
+}
+
+
+#lowest average cross-validated risk comparison
+colMeans(CV.risk)
+
+```
+All of these are very close, but B is the lowest
+```{r}
+Est.B.All <- glm(Y ~ W1.Age + W5 + W2 + W3 + W4 + W1.Age*W3 + W2*W5, data = ObsData)
+summary(Est.B.All)
+```
+#6 Actually using superlearner
+```{r}
+library(SuperLearner)
+library(earth)
+SL.library<- c('SL.ridge','SL.rpart', 'SL.earth')
+X <- subset(ObsData, select = c("W1.Age", "W2", "W3", "W4", "W5"))
+CV.SL.out <- CV.SuperLearner(Y=ObsData$Y, X=X, SL.library=SL.library,cvControl=list(V=8), innerCvControl = list(list(V=16)))
+summary(CV.SL.out)
+```
+
+
+
+
+
+
+
